@@ -19,3 +19,4 @@
 /WebServer.class
 /ChatDatabase.class
 *.class
+db.properties
