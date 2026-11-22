@@ -1,7 +1,7 @@
 # Java Client-Server Chat Application
 
-Swing GUI + `Socket`/`ServerSocket` + one thread per client + chat history saved to `chat_logs/`.
-Pure Java, no external libraries. Requires **JDK 8 or newer**.
+Swing GUI + `Socket`/`ServerSocket` + one thread per client + chat history saved to `chat_logs/` and to a **MySQL database (JDBC)**.
+Requires **JDK 8 or newer** and a MySQL server. The only library is the MySQL JDBC driver in `lib/`.
 
 ## Project structure
 
@@ -10,33 +10,38 @@ ChatApplication/
 ├── User.java            ├── ClientHandler.java    ├── ChatGUI.java
 ├── Message.java         ├── ChatServer.java       ├── ChatLogger.java
 ├── MessageHandler.java  ├── ChatClient.java       ├── WebServer.java   (phones / browsers)
-├── ChatRoom.java        ├── web/index.html        └── chat_logs/
-                         (the phone chat page)
+├── ChatRoom.java        ├── ChatDatabase.java     ├── db.properties   (MySQL settings)
+├── web/index.html       ├── lib/mysql-connector-j-8.4.0.jar
+└── chat_logs/           (the phone chat page; JDBC driver)
 ```
 
 ## How to run
 
 Open a terminal **inside the `ChatApplication` folder** (so `chat_logs/` and `web/` are found).
 
-1. **Compile** everything once:
+1. **Set up MySQL** (once): make sure MySQL is running and put your MySQL user / password in `db.properties`.
+   The database `chat_app` and its table `messages` are created automatically. If MySQL is not reachable the
+   server prints a warning and the chat still works (only the database saving is skipped).
+2. **Compile** everything once (use `;` instead of `:` on Windows):
    ```
-   javac *.java
+   javac -cp ".:lib/*" *.java
    ```
-2. **Start the server** on ONE computer:
+3. **Start the server** on ONE computer:
    ```
-   java ChatServer                 # chat port 5000, web page port 8080
-   java ChatServer 6000 9000       # or choose both ports
+   java -cp ".:lib/*" ChatServer                 # chat port 5000, web page port 8080
+   java -cp ".:lib/*" ChatServer 6000 9000       # or choose both ports
    ```
    It prints the addresses other devices must use, for example `http://192.168.1.25:8080`.
-   Type `users` to list who is online, `exit` (or Ctrl+C) to stop it.
-3. **Laptop / desktop (Swing app)**: `java ChatGUI`, enter the server IP (or `localhost` on the server PC),
+   Type `users` to list who is online, `history` to show the last 20 messages saved in MySQL, `exit` (or Ctrl+C) to stop it.
+4. **Laptop / desktop (Swing app)**: `java ChatGUI`, enter the server IP (or `localhost` on the server PC),
    port `5000`, a username, and click **Connect**. Open as many as you like.
-4. **Phone / tablet / any browser**: connect it to the **same Wi-Fi** as the server computer and open
+5. **Phone / tablet / any browser**: connect it to the **same Wi-Fi** as the server computer and open
    `http://<server-ip>:8080` (the address printed by the server). Type a username and tap **Join**.
    Nothing needs to be installed on the phone. Phones and laptops chat in the same room.
-5. **Firewall**: if another device cannot connect, allow Java (or ports 5000 and 8080) through the
+6. **Firewall**: if another device cannot connect, allow Java (or ports 5000 and 8080) through the
    server computer's firewall. Windows: *Windows Defender Firewall -> Allow an app -> Java*.
-6. **Chat history**: look in `chat_logs/` - each server start creates `chat_log_<date>_<time>.txt`.
+7. **Chat history**: look in `chat_logs/` (one `chat_log_<date>_<time>.txt` per server start) or query MySQL:
+   `SELECT * FROM messages;`
 
 Username rules: 1–20 characters, letters / digits / `_` / `-` only, not empty, not already taken
 (case-insensitive), and not `SERVER`.
@@ -54,6 +59,7 @@ Username rules: 1–20 characters, letters / digits / `_` / `-` only, not empty,
 | `ChatClient` | Connects to the server, sends messages, listens on a background thread. |
 | `ChatGUI` | Swing window; also a `MessageHandler` that displays network events. |
 | `ChatLogger` | Writes messages and events to `chat_logs/*.txt`. |
+| `ChatDatabase` | JDBC: connects to MySQL, creates the `messages` table, saves every message and reads the recent history. |
 | `WebServer` | Built-in HTTP server (JDK only). Serves `web/index.html` and connects each browser to the same `ChatRoom` as a `MessageHandler`, using Server-Sent Events for incoming messages. |
 
 ## Network protocol (one text line per command)
@@ -107,4 +113,14 @@ with `FileOutputStream(file, true)` wrapped in `BufferedWriter` inside try-with-
 [2026-10-06 09:10:05] [EVENT] alice joined the chat
 [2026-10-06 09:10:06] alice: hello everyone
 [2026-10-06 09:10:06] [EVENT] bob left the chat
+```
+
+## Database (JDBC) concepts
+
+`ChatDatabase` uses the standard JDBC steps: `DriverManager.getConnection(url, user, password)` -> `PreparedStatement`
+(with `?` parameters, so there is no SQL injection) -> `executeUpdate()` / `executeQuery()` -> `ResultSet`, all inside
+try-with-resources. `ChatRoom.broadcast()` calls `saveMessage()` for every chat message and join/leave notice.
+
+```
+messages(id INT AUTO_INCREMENT PRIMARY KEY, sender VARCHAR(50), content TEXT, type VARCHAR(10), sent_at DATETIME)
 ```

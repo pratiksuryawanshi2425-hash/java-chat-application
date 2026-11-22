@@ -29,6 +29,7 @@ public class ChatServer {
     private final int port;
     private final int webPort;
     private final ChatLogger logger;
+    private final ChatDatabase database;
     private final ChatRoom room;
 
     private ServerSocket serverSocket;
@@ -39,7 +40,8 @@ public class ChatServer {
         this.port = port;
         this.webPort = webPort;
         this.logger = new ChatLogger();
-        this.room = new ChatRoom(logger);
+        this.database = new ChatDatabase();
+        this.room = new ChatRoom(logger, database);
     }
 
     /** Opens the port and keeps accepting clients until stop() is called. */
@@ -53,7 +55,10 @@ public class ChatServer {
         System.out.println("Chat port : " + port + "   (Swing clients: java ChatGUI)");
         printAddresses();
         System.out.println("Log file  : " + logger.getLogFile().getPath());
-        System.out.println("Type 'users' to list online users, 'exit' to stop.");
+        if (database.connect()) {
+            System.out.println("Database  : connected (chat history is saved in MySQL)");
+        }
+        System.out.println("Type 'users' to list online users, 'history' to show saved messages, 'exit' to stop.");
 
         startConsoleListener();
 
@@ -92,6 +97,7 @@ public class ChatServer {
             // already closing
         }
         logger.logEvent("Server stopped");
+        database.close();
         System.out.println("Server stopped.");
     }
 
@@ -109,6 +115,10 @@ public class ChatServer {
                             return;
                         } else if (line.equals("users")) {
                             System.out.println("Online (" + room.getUserCount() + "): " + room.getOnlineUsernames());
+                        } else if (line.equals("history")) {
+                            for (Message m : database.getRecentMessages(20)) {
+                                System.out.println(m.toDisplayString(true));
+                            }
                         }
                     }
                 } catch (IOException ignored) {

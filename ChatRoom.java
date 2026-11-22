@@ -31,9 +31,11 @@ public class ChatRoom {
     // key = lower-case username, so "Ali" and "ali" count as duplicates
     private final Map<String, Participant> participants = new LinkedHashMap<String, Participant>();
     private final ChatLogger logger;
+    private final ChatDatabase database;
 
-    public ChatRoom(ChatLogger logger) {
+    public ChatRoom(ChatLogger logger, ChatDatabase database) {
         this.logger = logger;
+        this.database = database;
     }
 
     /**
@@ -72,6 +74,7 @@ public class ChatRoom {
     /** Logs the message and sends it to every connected client (polymorphic call). */
     public void broadcast(Message message) {
         logger.logMessage(message);
+        database.saveMessage(message);
         for (MessageHandler handler : snapshotHandlers()) {
             try {
                 handler.handleMessage(message);
